@@ -1,0 +1,1 @@
+Explain how Bluetooth RFCOMM differs from Wi-Fi networking. Answer in simple Bangla with one practical example.

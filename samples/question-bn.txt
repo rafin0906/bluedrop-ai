@@ -1,0 +1,1 @@
+C++ pointer এবং reference-এর পার্থক্য সহজ বাংলায় বুঝিয়ে বলো। ছোট একটি code example দাও।

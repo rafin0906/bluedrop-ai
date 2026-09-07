@@ -1,0 +1,6 @@
+{$DOMAIN} {
+    request_body {
+        max_size 512KB
+    }
+    reverse_proxy broker:8000
+}

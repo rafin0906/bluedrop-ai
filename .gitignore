@@ -1,0 +1,14 @@
+node_modules/
+**/node_modules/
+**/build/
+**/.gradle/
+**/.cxx/
+**/local.properties
+**/__pycache__/
+**/.venv/
+backend/.env
+backend/data/
+*.sqlite3*
+receiver-config.json
+*.part
+.pending*
