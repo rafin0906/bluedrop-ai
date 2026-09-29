@@ -22,15 +22,21 @@ MAX_TEXT = 64 * 1024
 MAX_ANSWER = 200 * 1024
 
 class Broker:
-    def __init__(self, db_path, key, token, model='openai/gpt-oss-120b', provider=None):
+    def __init__(self, db_path, key, token, model='gpt-5.6-sol', endpoint=None, provider=None):
         if len(token) < 32 or token.startswith('CHANGE_'):
             raise ValueError('Set BRIDGE_TOKEN to a random token of at least 32 characters')
         if not key or key.startswith('PASTE_'):
-            raise ValueError('Set GROQ_API_KEY in backend/.env')
+            raise ValueError('Set OPENAI_API_KEY or GROQ_API_KEY in backend/.env')
         self.path = str(db_path)
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.key, self.token, self.model = key, token, model
-        self.provider = provider or self.call_groq
+        if endpoint:
+            self.endpoint = endpoint
+        elif self.key.startswith('sk-') or 'gpt' in self.model.lower():
+            self.endpoint = 'https://api.openai.com/v1/chat/completions'
+        else:
+            self.endpoint = 'https://api.groq.com/openai/v1/chat/completions'
+        self.provider = provider or self.call_ai
         self.stop = threading.Event()
         with self.db() as db:
             db.execute('PRAGMA journal_mode=WAL')
@@ -97,10 +103,10 @@ class Broker:
         if not row: raise HTTPException(404, 'Job not found')
         return self.public(row)
 
-    def call_groq(self, messages):
+    def call_ai(self, messages):
         body = json.dumps({'model': self.model, 'messages': messages,
                            'max_completion_tokens': 8192, 'stream': False}).encode()
-        req = Request('https://api.groq.com/openai/v1/chat/completions', body,
+        req = Request(self.endpoint, body,
                       {'Authorization': f'Bearer {self.key}', 'Content-Type': 'application/json',
                        'User-Agent': 'BlueDropAI/2.0'}, method='POST')
         try:
@@ -112,10 +118,12 @@ class Broker:
                 reason = choice.get('finish_reason', 'stop')
         except HTTPError as exc:
             # Do not return provider bodies/headers or secrets to clients/logs.
-            raise ValueError(f'Groq HTTP {exc.code}. Check API key, quota and model access; submit again after fixing.') from None
-        if not isinstance(answer, str) or not answer.strip(): raise ValueError('Groq returned no answer')
+            raise ValueError(f'AI Provider HTTP {exc.code}. Check API key, quota and model access; submit again after fixing.') from None
+        if not isinstance(answer, str) or not answer.strip(): raise ValueError('Provider returned no answer')
         if len(answer.encode('utf-8')) > MAX_ANSWER: raise ValueError('Answer exceeds 200 KiB')
         return answer, reason
+
+    call_groq = call_ai
 
     def work_one(self):
         with self.db() as db:
@@ -148,9 +156,15 @@ class Broker:
 def create_app(broker=None):
     @asynccontextmanager
     async def lifespan(app):
+        key = os.getenv('OPENAI_API_KEY') or os.getenv('GROQ_API_KEY', '')
+        model = os.getenv('OPENAI_MODEL') or os.getenv('GROQ_MODEL', 'gpt-5.6-sol')
+        endpoint = os.getenv('OPENAI_BASE_URL') or os.getenv('AI_ENDPOINT')
         app.state.broker = broker or Broker(
-            os.getenv('DATABASE_PATH', './data/jobs.sqlite3'), os.getenv('GROQ_API_KEY', ''),
-            os.getenv('BRIDGE_TOKEN', ''), os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b'))
+            os.getenv('DATABASE_PATH', './data/jobs.sqlite3'),
+            key,
+            os.getenv('BRIDGE_TOKEN', ''),
+            model,
+            endpoint=endpoint)
         app.state.broker.thread.start()
         yield
         app.state.broker.stop.set()

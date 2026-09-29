@@ -8,11 +8,11 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.4
-      - key: GROQ_API_KEY
+      - key: OPENAI_API_KEY
         sync: false
       - key: BRIDGE_TOKEN
         sync: false
-      - key: GROQ_MODEL
-        value: openai/gpt-oss-120b
+      - key: OPENAI_MODEL
+        value: gpt-5.6-sol
       - key: DATABASE_PATH
         value: ./data/jobs.sqlite3
